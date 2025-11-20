@@ -2,458 +2,503 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <title>Safe Crossing: Real Traffic Edition</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Safe Crossing Hero (With Sound)</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: #87CEEB; user-select: none; }
         
-        #ui-container {
-            position: absolute;
-            top: 0;
-            width: 100%;
-            text-align: center;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        #instruction {
-            font-size: 2rem;
-            font-weight: bold;
-            color: white;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 15px;
-            margin-top: 20px;
-            display: inline-block;
-            border-radius: 15px;
-            border: 4px solid white;
-        }
-
-        #signal-status {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            border: 5px solid white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            transition: background-color 0.2s;
-        }
-
-        .light-red { background-color: #ff3333; box-shadow: 0 0 30px #ff3333; }
-        .light-green { background-color: #33ff33; box-shadow: 0 0 30px #33ff33; }
-
-        /* Start Screen Overlay */
-        #start-screen {
+        /* --- HEADS UP DISPLAY (HUD) --- */
+        #ui-layer {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Signal Indicator */
+        .signal-box {
+            align-self: flex-end;
+            margin: 20px;
+            background: #222;
+            padding: 10px;
+            border-radius: 10px;
+            border: 3px solid white;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+        .light { width: 60px; height: 60px; border-radius: 50%; background: #444; transition: 0.3s; }
+        .light.red.active { background-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
+        .light.green.active { background-color: #00ff00; box-shadow: 0 0 20px #00ff00; }
+
+        /* Instructions */
+        .top-center {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 30px;
+            border-radius: 20px;
+            color: white;
+            border: 2px solid white;
+        }
+        #status-text { font-size: 24px; font-weight: bold; text-transform: uppercase; }
+
+        /* Controls Guide */
+        .controls-guide {
+            align-self: center;
+            margin-bottom: 40px;
+            display: grid;
+            grid-template-columns: 60px 60px 60px;
+            gap: 10px;
+            opacity: 0.8;
+        }
+        .key {
+            width: 60px; height: 60px;
+            background: rgba(255,255,255,0.2);
+            border: 2px solid white;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 30px;
+            font-weight: bold;
+        }
+        .key-up { grid-column: 2; }
+        .key-left { grid-column: 1; grid-row: 2; }
+        .key-down { grid-column: 2; grid-row: 2; }
+        .key-right { grid-column: 3; grid-row: 2; }
+        .key.pressed { background: #4CAF50; transform: scale(0.95); }
+
+        /* Start Screen */
+        #start-screen, #game-over {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 100;
             color: white;
-        }
-
-        #game-over {
-            display: none;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            text-align: center;
-            border: 5px solid #333;
-            box-shadow: 0 10px 50px rgba(0,0,0,0.5);
             pointer-events: auto;
-            z-index: 50;
         }
-
-        h1 { margin: 0 0 20px 0; color: #333; }
-        .big-btn {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            padding: 20px 40px;
-            text-align: center;
-            font-size: 24px;
-            border-radius: 15px;
-            cursor: pointer;
+        #game-over { display: none; }
+        
+        .btn {
+            background: #ffcc00; color: black; border: none;
+            padding: 20px 50px; font-size: 24px; font-weight: bold;
+            border-radius: 50px; cursor: pointer; margin-top: 20px;
+            box-shadow: 0 5px 0 #b38f00;
             transition: 0.2s;
-            font-weight: bold;
-            box-shadow: 0 5px 0 #2E7D32;
         }
-        .big-btn:hover { background-color: #45a049; transform: translateY(-2px); }
-        .big-btn:active { transform: translateY(2px); box-shadow: none; }
+        .btn:hover { transform: scale(1.1); }
+        .btn:active { transform: translateY(4px); box-shadow: none; }
 
-        #confetti {
-            display: none;
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 20;
-            font-size: 60px;
-            text-align: center;
-            top: 20%;
-            color: gold;
-            text-shadow: 2px 2px 0 #000;
-        }
     </style>
 </head>
 <body>
 
-    <!-- Start Screen (Required for Audio Permission) -->
+    <!-- Start Screen -->
     <div id="start-screen">
-        <h1 style="color:white; font-size: 3rem;">Safe Crossing Hero</h1>
-        <p style="font-size: 1.5rem; margin-bottom: 30px;">Turn your volume up! 🔊</p>
-        <button class="big-btn" onclick="startGame()">CLICK TO START</button>
+        <h1>🚦 Road Safety Hero</h1>
+        <p>Watch the lights. Wait for Green. Cross Safely.</p>
+        <button class="btn" onclick="startGame()">PLAY GAME</button>
     </div>
 
-    <div id="ui-container">
-        <div id="instruction">WAIT for Green</div>
-    </div>
-
-    <div id="signal-status" class="light-red"></div>
-    <div id="confetti">🎉 GREAT JOB! 🎉</div>
-
+    <!-- Game Over Screen -->
     <div id="game-over">
-        <h1 id="msg-title">Oops!</h1>
-        <p id="msg-text" style="font-size: 1.2rem; margin-bottom:20px;">You crossed on Red!</p>
-        <button class="big-btn" onclick="resetGame()">Try Again</button>
+        <h1 id="go-title">CRASH!</h1>
+        <p id="go-msg">Always look before crossing.</p>
+        <button class="btn" onclick="resetGame()">TRY AGAIN</button>
     </div>
 
-    <!-- Load Three.js -->
+    <!-- HUD -->
+    <div id="ui-layer">
+        <div class="top-center">
+            <div id="status-text">WAIT</div>
+        </div>
+
+        <div class="controls-guide">
+            <div id="k-up" class="key key-up">⬆</div>
+            <div id="k-left" class="key key-left">⬅</div>
+            <div id="k-down" class="key key-down">⬇</div>
+            <div id="k-right" class="key key-right">➡</div>
+        </div>
+
+        <div class="signal-box">
+            <div id="l-red" class="light red active"></div>
+            <div id="l-green" class="light green"></div>
+        </div>
+    </div>
+
+    <!-- Three.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
-        // --- AUDIO SYSTEM (Synthesizer) ---
-        const AudioSys = {
-            ctx: null,
-            masterGain: null,
-            trafficOsc: null,
-            trafficGain: null,
-
-            init: function() {
-                if (!this.ctx) {
-                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-                    this.masterGain = this.ctx.createGain();
-                    this.masterGain.gain.value = 0.3; // Master volume
-                    this.masterGain.connect(this.ctx.destination);
-                }
-            },
-
-            playTone: function(freq, type, duration, time = 0) {
-                if(!this.ctx) return;
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                osc.type = type;
-                osc.frequency.setValueAtTime(freq, this.ctx.currentTime + time);
-                
-                gain.gain.setValueAtTime(0.2, this.ctx.currentTime + time);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + time + duration);
-
-                osc.connect(gain);
-                gain.connect(this.masterGain);
-                osc.start(this.ctx.currentTime + time);
-                osc.stop(this.ctx.currentTime + time + duration);
-            },
-
-            // Traffic Noise (Brown Noise simulation)
-            startTraffic: function() {
-                if(!this.ctx) return;
-                const bufferSize = 2 * this.ctx.sampleRate;
-                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-                const output = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) {
-                    const white = Math.random() * 2 - 1;
-                    output[i] = (lastOut + (0.02 * white)) / 1.02;
-                    lastOut = output[i];
-                    output[i] *= 3.5; 
-                }
-                
-                this.trafficOsc = this.ctx.createBufferSource();
-                this.trafficOsc.buffer = buffer;
-                this.trafficOsc.loop = true;
-                this.trafficGain = this.ctx.createGain();
-                this.trafficGain.gain.value = 0.0; // Start silent
-                
-                this.trafficOsc.connect(this.trafficGain);
-                this.trafficGain.connect(this.masterGain);
-                this.trafficOsc.start(0);
-            },
-
-            setTrafficVolume: function(vol) {
-                if(this.trafficGain) {
-                    // Smooth transition
-                    this.trafficGain.gain.setTargetAtTime(vol, this.ctx.currentTime, 0.5);
-                }
-            },
-
-            playSignalGreen: function() {
-                // High pitch "Ding-Ding"
-                this.playTone(880, 'sine', 0.1, 0);
-                this.playTone(1100, 'sine', 0.3, 0.15);
-            },
-
-            playSignalRed: function() {
-                // Lower "Boop"
-                this.playTone(300, 'square', 0.3);
-            },
-
-            playStep: function() {
-                // Short noise burst
-                this.playTone(200, 'triangle', 0.05);
-            },
-
-            playCrash: function() {
-                if(!this.ctx) return;
-                // Chaotic noise
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(100, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(20, this.ctx.currentTime + 0.5);
-                
-                gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
-
-                osc.connect(gain);
-                gain.connect(this.masterGain);
-                osc.start();
-                osc.stop(this.ctx.currentTime + 0.5);
-            },
-
-            playWin: function() {
-                // Arpeggio
-                this.playTone(523.25, 'sine', 0.2, 0);    // C
-                this.playTone(659.25, 'sine', 0.2, 0.15); // E
-                this.playTone(783.99, 'sine', 0.4, 0.30); // G
-                this.playTone(1046.5, 'sine', 0.6, 0.45); // C (High)
-            }
-        };
-        let lastOut = 0; // For noise generation
-
-        // --- GAME CONFIGURATION ---
+        // --- GAME VARIABLES ---
         let scene, camera, renderer;
-        let player, trafficLight, road;
+        let player, playerLegs = [], playerArms = [];
         let cars = [];
-        let isGameRunning = false; 
+        let arrows = [];
+        let isGameRunning = false;
         let signalState = "red"; 
         let keyState = {};
-        let carSpeed = 0.15;
-        
-        const PLAYER_SPEED = 0.1;
-        const CROSSING_TIME = 4000; 
-        let signalInterval;
+        let laneSpeeds = [0.12, 0.18, 0.10]; // Speed for 3 lanes
+        let signalTimer;
+        const CROSSING_TIME = 5000; 
 
-        // --- INITIALIZATION ---
+        // --- AUDIO SYSTEM (Simple) ---
+        const AudioSys = {
+            ctx: null,
+            init: function() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            },
+            beep: function(freq, type) {
+                if(!this.ctx) return;
+                const o = this.ctx.createOscillator();
+                const g = this.ctx.createGain();
+                o.type = type; o.frequency.value = freq;
+                g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+                o.connect(g); g.connect(this.ctx.destination);
+                o.start(); o.stop(this.ctx.currentTime + 0.5);
+            },
+            engine: function() { /* Simulated in logic for simplicity */ }
+        };
+
+        // --- INIT ---
         function startGame() {
             document.getElementById('start-screen').style.display = 'none';
-            AudioSys.init(); // Enable Audio
-            
-            if (!scene) {
-                init3D();
-            }
-            
-            isGameRunning = true;
-            AudioSys.startTraffic();
-            AudioSys.setTrafficVolume(0.8); // Turn on traffic noise
+            AudioSys.init();
+            if (!scene) init3D();
             resetGame();
         }
 
         function init3D() {
+            // Scene Setup
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87CEEB);
-            
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 6, 9);
-            camera.lookAt(0, 0, 0);
+            scene.fog = new THREE.Fog(0x87CEEB, 10, 60);
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 8, 12);
+            camera.lookAt(0, 0, 1);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(5, 10, 5);
-            dirLight.castShadow = true;
-            scene.add(dirLight);
+            // Lights
+            const amb = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(amb);
+            const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+            sun.position.set(10, 20, 10);
+            sun.castShadow = true;
+            sun.shadow.mapSize.width = 1024;
+            sun.shadow.mapSize.height = 1024;
+            scene.add(sun);
 
-            createWorld();
+            buildEnvironment();
+            createPlayer();
             
+            // Input
             window.addEventListener('keydown', (e) => {
-                if(!keyState[e.code] && isGameRunning) AudioSys.playStep(); // Sound on key press
                 keyState[e.code] = true;
+                highlightKey(e.code, true);
             });
-            window.addEventListener('keyup', (e) => keyState[e.code] = false);
-            window.addEventListener('resize', onWindowResize, false);
+            window.addEventListener('keyup', (e) => {
+                keyState[e.code] = false;
+                highlightKey(e.code, false);
+            });
+            window.addEventListener('resize', onResize);
 
             animate();
         }
 
-        function createWorld() {
-            // Ground
-            const ground = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshStandardMaterial({ color: 0x55aa55 }));
-            ground.rotation.x = -Math.PI / 2;
-            ground.position.y = -0.1;
-            scene.add(ground);
+        // --- BUILDERS ---
 
-            // Road
-            road = new THREE.Mesh(new THREE.PlaneGeometry(50, 4), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+        function buildEnvironment() {
+            // Grass
+            const grass = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: 0x4CAF50 }));
+            grass.rotation.x = -Math.PI / 2;
+            grass.receiveShadow = true;
+            scene.add(grass);
+
+            // Road (Asphalt)
+            const road = new THREE.Mesh(new THREE.PlaneGeometry(100, 9), new THREE.MeshStandardMaterial({ color: 0x333333 }));
             road.rotation.x = -Math.PI / 2;
+            road.position.y = 0.02;
+            road.receiveShadow = true;
             scene.add(road);
 
-            // Stripes
-            for(let i = -2; i <= 2; i++) {
-                const stripe = new THREE.Mesh(new THREE.PlaneGeometry(1, 3.5), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            // Zebra Crossing
+            const zebraGroup = new THREE.Group();
+            for(let i=-2; i<=2; i++) {
+                const stripe = new THREE.Mesh(new THREE.PlaneGeometry(1, 9), new THREE.MeshBasicMaterial({ color: 0xffffff }));
                 stripe.rotation.x = -Math.PI / 2;
-                stripe.position.set(i * 1.5, 0.01, 0);
-                scene.add(stripe);
+                stripe.position.set(i * 1.8, 0.03, 0);
+                zebraGroup.add(stripe);
             }
+            scene.add(zebraGroup);
 
-            // Player
-            player = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.5, 0.8), new THREE.MeshStandardMaterial({ color: 0x0044ff }));
-            player.position.set(0, 0.75, 5);
-            player.castShadow = true;
+            // Road Arrows (Guides)
+            const arrowMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.6 });
+            const arrowGeo = new THREE.ConeGeometry(0.5, 1, 32);
+            
+            // Lane 1 Arrow (Left)
+            let a1 = new THREE.Mesh(arrowGeo, arrowMat);
+            a1.rotation.z = Math.PI / 2;
+            a1.position.set(-8, 0.1, -3);
+            scene.add(a1);
+
+            // Lane 2 Arrow (Right)
+            let a2 = new THREE.Mesh(arrowGeo, arrowMat);
+            a2.rotation.z = -Math.PI / 2;
+            a2.position.set(8, 0.1, 0);
+            scene.add(a2);
+
+            // Lane 3 Arrow (Left)
+            let a3 = new THREE.Mesh(arrowGeo, arrowMat);
+            a3.rotation.z = Math.PI / 2;
+            a3.position.set(-8, 0.1, 3);
+            scene.add(a3);
+        }
+
+        function createPlayer() {
+            const kid = new THREE.Group();
+
+            // Materials
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffccaa });
+            const shirtMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+            const pantsMat = new THREE.MeshStandardMaterial({ color: 0x0000ff });
+
+            // Head
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skinMat);
+            head.position.y = 1.6;
+            kid.add(head);
+
+            // Body
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.3), shirtMat);
+            body.position.y = 1.0;
+            kid.add(body);
+
+            // Legs (Animated)
+            const legGeo = new THREE.BoxGeometry(0.2, 0.7, 0.25);
+            const leftLeg = new THREE.Mesh(legGeo, pantsMat);
+            leftLeg.position.set(-0.15, 0.35, 0);
+            kid.add(leftLeg);
+            playerLegs.push(leftLeg);
+
+            const rightLeg = new THREE.Mesh(legGeo, pantsMat);
+            rightLeg.position.set(0.15, 0.35, 0);
+            kid.add(rightLeg);
+            playerLegs.push(rightLeg);
+
+            kid.castShadow = true;
+            player = kid;
             scene.add(player);
-
-            // Traffic Light Pole
-            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4), new THREE.MeshStandardMaterial({ color: 0x555555 }));
-            pole.position.set(3.5, 2, -3);
-            scene.add(pole);
-            trafficLight = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.5, 0.8), new THREE.MeshStandardMaterial({ color: 0x222222 }));
-            trafficLight.position.set(3.5, 3.5, -3);
-            scene.add(trafficLight);
-
-            spawnCars();
         }
 
-        function spawnCars() {
-            for(let i=0; i<3; i++) {
-                const car = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 1), new THREE.MeshStandardMaterial({ color: Math.random() > 0.5 ? 0xff3300 : 0xffcc00 }));
-                car.position.set(-15 - (i * 10), 0.5, (Math.random() > 0.5 ? 1 : -1));
-                car.castShadow = true;
-                scene.add(car);
-                cars.push(car);
+        function spawnVehicle(type, zPos, direction) {
+            const vehicle = new THREE.Group();
+            let mainColor, bodyGeo;
+
+            // Wheels helper
+            const addWheels = (xOffset, zOffset) => {
+                const wGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 16);
+                const wMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+                wGeo.rotateX(Math.PI/2);
+                
+                const w1 = new THREE.Mesh(wGeo, wMat); w1.position.set(xOffset, 0.3, zOffset);
+                const w2 = new THREE.Mesh(wGeo, wMat); w2.position.set(xOffset, 0.3, -zOffset);
+                vehicle.add(w1); vehicle.add(w2);
+            };
+
+            if (type === 'car') {
+                // Sports Car
+                const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.5, 1.2), new THREE.MeshStandardMaterial({color: 0xe74c3c}));
+                chassis.position.y = 0.6;
+                const top = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 1), new THREE.MeshStandardMaterial({color: 0xffffff}));
+                top.position.set(-0.2, 1.0, 0);
+                vehicle.add(chassis); vehicle.add(top);
+                addWheels(-0.8, 0.6); addWheels(0.8, 0.6);
+            } 
+            else if (type === 'bus') {
+                // School Bus
+                const body = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.4, 1.3), new THREE.MeshStandardMaterial({color: 0xf1c40f}));
+                body.position.y = 1.0;
+                // Windows
+                const win = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.4, 1.35), new THREE.MeshStandardMaterial({color: 0x333333}));
+                win.position.y = 1.2;
+                vehicle.add(body); vehicle.add(win);
+                addWheels(-1.5, 0.6); addWheels(1.5, 0.6);
             }
+            else if (type === 'truck') {
+                // Truck
+                const cab = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.2, 1.3), new THREE.MeshStandardMaterial({color: 0x3498db}));
+                cab.position.set(1.2, 0.9, 0);
+                const trailer = new THREE.Mesh(new THREE.BoxGeometry(3.5, 1.5, 1.4), new THREE.MeshStandardMaterial({color: 0xecf0f1}));
+                trailer.position.set(-1.4, 1.1, 0);
+                vehicle.add(cab); vehicle.add(trailer);
+                addWheels(1.2, 0.6); addWheels(-0.5, 0.6); addWheels(-2.5, 0.6);
+            }
+
+            vehicle.position.set(direction === 1 ? -20 : 20, 0, zPos);
+            vehicle.userData = { speed: 0, direction: direction, type: type };
+            scene.add(vehicle);
+            cars.push(vehicle);
         }
 
-        function toggleSignal() {
-            if(!isGameRunning) return;
+        function setupTraffic() {
+            // Clear old cars
+            cars.forEach(c => scene.remove(c));
+            cars = [];
 
-            if (signalState === "red") {
-                signalState = "green";
-                updateUI("green");
-                AudioSys.playSignalGreen();
-                AudioSys.setTrafficVolume(0.1); // Quiet cars when green
+            // Lane 1 (Z: -3) - Left to Right - CARS
+            spawnVehicle('car', -3, 1);
+            setTimeout(() => spawnVehicle('car', -3, 1), 2000);
+
+            // Lane 2 (Z: 0) - Right to Left - BUS
+            spawnVehicle('bus', 0, -1);
+            
+            // Lane 3 (Z: 3) - Left to Right - TRUCK
+            spawnVehicle('truck', 3, 1);
+        }
+
+        // --- GAME LOGIC ---
+
+        function updateSignal() {
+            if (!isGameRunning) return;
+            
+            const redLight = document.getElementById('l-red');
+            const greenLight = document.getElementById('l-green');
+            const status = document.getElementById('status-text');
+
+            if (signalState === 'red') {
+                signalState = 'green'; // Green for PEDESTRIAN
+                redLight.classList.remove('active');
+                greenLight.classList.add('active');
+                status.innerText = "GO! (Safe)";
+                status.style.color = "#00ff00";
+                AudioSys.beep(800, 'sine'); // Ding!
             } else {
-                signalState = "red";
-                updateUI("red");
-                AudioSys.playSignalRed();
-                AudioSys.setTrafficVolume(0.8); // Loud cars when red
+                signalState = 'red'; // Red for PEDESTRIAN
+                greenLight.classList.remove('active');
+                redLight.classList.add('active');
+                status.innerText = "WAIT! (Cars Moving)";
+                status.style.color = "#ff0000";
+                AudioSys.beep(300, 'square'); // Boop!
             }
         }
 
-        function updateUI(state) {
-            const signalDiv = document.getElementById('signal-status');
-            const textDiv = document.getElementById('instruction');
-
-            if (state === "green") {
-                signalDiv.className = "light-green";
-                textDiv.innerHTML = "GO! Cross Safe!";
-                textDiv.style.color = "#33ff33";
-                trafficLight.material.color.setHex(0x33ff33);
-            } else {
-                signalDiv.className = "light-red";
-                textDiv.innerHTML = "STOP! Wait for Green.";
-                textDiv.style.color = "#ff3333";
-                trafficLight.material.color.setHex(0xff3333);
-            }
-        }
-
-        function moveCars() {
-            cars.forEach(car => {
-                if(signalState === "red") {
-                    car.position.x += carSpeed;
-                }
-                if (car.position.x > 20) {
-                    car.position.x = -20;
-                    car.position.z = (Math.random() > 0.5 ? 1 : -1);
-                    car.material.color.setHex(Math.random() * 0xffffff);
-                }
-            });
-        }
-
-        function checkCollisions() {
-            const playerBox = new THREE.Box3().setFromObject(player);
-            cars.forEach(car => {
-                if (playerBox.intersectsBox(new THREE.Box3().setFromObject(car))) {
-                    gameOver("CRASH!", "You hit a car!");
-                }
-            });
-        }
-
-        function checkWin() {
-            if (player.position.z < -3) {
-                isGameRunning = false;
-                AudioSys.playWin();
-                document.getElementById('confetti').style.display = 'block';
-                setTimeout(() => gameOver("You did it!", "You crossed safely!"), 2000);
+        function highlightKey(code, active) {
+            const map = { 'ArrowUp': 'k-up', 'ArrowDown': 'k-down', 'ArrowLeft': 'k-left', 'ArrowRight': 'k-right' };
+            if(map[code]) {
+                const el = document.getElementById(map[code]);
+                if(active) el.classList.add('pressed');
+                else el.classList.remove('pressed');
             }
         }
 
         function resetGame() {
-            player.position.set(0, 0.75, 5);
             isGameRunning = true;
-            signalState = "red";
-            updateUI("red");
+            player.position.set(0, 0, 7); // Start
+            player.rotation.y = Math.PI;
+            
+            signalState = 'red'; // Start on Red (Wait)
+            document.getElementById('l-red').classList.add('active');
+            document.getElementById('l-green').classList.remove('active');
+            document.getElementById('status-text').innerText = "WAIT";
+            document.getElementById('status-text').style.color = "red";
+            
             document.getElementById('game-over').style.display = 'none';
-            document.getElementById('confetti').style.display = 'none';
             
-            // Reset Signal Loop
-            clearInterval(signalInterval);
-            signalInterval = setInterval(toggleSignal, CROSSING_TIME);
+            setupTraffic();
             
-            cars.forEach((car, index) => {
-                car.position.set(-15 - (index * 10), 0.5, (Math.random() > 0.5 ? 1 : -1));
-            });
-        }
-
-        function gameOver(title, msg) {
-            isGameRunning = false;
-            AudioSys.playCrash();
-            AudioSys.setTrafficVolume(0); // Silence traffic
-            clearInterval(signalInterval); // Stop signal timer
-            document.getElementById('msg-title').innerText = title;
-            document.getElementById('msg-text').innerText = msg;
-            document.getElementById('game-over').style.display = 'block';
+            clearInterval(signalTimer);
+            signalTimer = setInterval(updateSignal, CROSSING_TIME);
         }
 
         function animate() {
             requestAnimationFrame(animate);
+            
+            const time = Date.now() * 0.01;
+
+            // --- PLAYER MOVEMENT & ANIMATION ---
+            let isMoving = false;
             if (isGameRunning) {
-                if (keyState['ArrowUp'] || keyState['KeyW']) player.position.z -= PLAYER_SPEED;
-                if (keyState['ArrowDown'] || keyState['KeyS']) player.position.z += PLAYER_SPEED;
-                if (keyState['ArrowLeft'] || keyState['KeyA']) player.position.x -= PLAYER_SPEED;
-                if (keyState['ArrowRight'] || keyState['KeyD']) player.position.x += PLAYER_SPEED;
+                const speed = 0.1;
+                if (keyState['ArrowUp']) { player.position.z -= speed; player.rotation.y = Math.PI; isMoving = true; }
+                if (keyState['ArrowDown']) { player.position.z += speed; player.rotation.y = 0; isMoving = true; }
+                if (keyState['ArrowLeft']) { player.position.x -= speed; player.rotation.y = -Math.PI/2; isMoving = true; }
+                if (keyState['ArrowRight']) { player.position.x += speed; player.rotation.y = Math.PI/2; isMoving = true; }
 
-                player.position.x = Math.max(-4, Math.min(4, player.position.x));
-                player.position.z = Math.max(-5, Math.min(6, player.position.z));
-
-                moveCars();
-                checkCollisions();
-                checkWin();
+                // Walking Animation (Swing Legs)
+                if (isMoving) {
+                    playerLegs[0].rotation.x = Math.sin(time) * 0.5;
+                    playerLegs[1].rotation.x = Math.sin(time + Math.PI) * 0.5;
+                } else {
+                    playerLegs[0].rotation.x = 0;
+                    playerLegs[1].rotation.x = 0;
+                }
             }
+
+            // --- TRAFFIC LOGIC ---
+            cars.forEach(car => {
+                // Speed Logic: If Pedestrian Signal is RED, Cars Move. If Green, Cars Stop.
+                let targetSpeed = (signalState === 'red') ? 0.15 : 0;
+                
+                // Interpolate speed for smoothness
+                car.userData.speed += (targetSpeed - car.userData.speed) * 0.1;
+                
+                car.position.x += car.userData.speed * car.userData.direction;
+
+                // Loop logic
+                if (car.position.x > 25 && car.userData.direction === 1) car.position.x = -25;
+                if (car.position.x < -25 && car.userData.direction === -1) car.position.x = 25;
+
+                // Collision
+                const pBox = new THREE.Box3().setFromObject(player);
+                const cBox = new THREE.Box3().setFromObject(car);
+                // Shrink collision box slightly to be forgiving
+                cBox.expandByScalar(-0.2);
+
+                if (pBox.intersectsBox(cBox)) {
+                    gameOver();
+                }
+            });
+
+            // --- WIN CONDITION ---
+            if (player.position.z < -6 && isGameRunning) {
+                winGame();
+            }
+
             renderer.render(scene, camera);
         }
 
-        function onWindowResize() {
+        function gameOver() {
+            isGameRunning = false;
+            document.getElementById('game-over').style.display = 'flex';
+            document.getElementById('go-title').innerText = "OH NO!";
+            document.getElementById('go-msg').innerText = "You hit a vehicle. Wait for Green!";
+        }
+
+        function winGame() {
+            isGameRunning = false;
+            document.getElementById('game-over').style.display = 'flex';
+            document.getElementById('go-title').innerText = "YOU DID IT! 🎉";
+            document.getElementById('go-msg').innerText = "Great job crossing safely!";
+            AudioSys.beep(600, 'sine');
+        }
+
+        function onResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
