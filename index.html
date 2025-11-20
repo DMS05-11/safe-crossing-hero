@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safe Crossing Hero (With Sound)</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: #87CEEB; user-select: none; }
+        
+        #ui-container {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #instruction {
+            font-size: 2rem;
+            font-weight: bold;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            margin-top: 20px;
+            display: inline-block;
+            border-radius: 15px;
+            border: 4px solid white;
+        }
+
+        #signal-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 5px solid white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            transition: background-color 0.2s;
+        }
+
+        .light-red { background-color: #ff3333; box-shadow: 0 0 30px #ff3333; }
+        .light-green { background-color: #33ff33; box-shadow: 0 0 30px #33ff33; }
+
+        /* Start Screen Overlay */
+        #start-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            color: white;
+        }
+
+        #game-over {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            border: 5px solid #333;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+            pointer-events: auto;
+            z-index: 50;
+        }
+
+        h1 { margin: 0 0 20px 0; color: #333; }
+        .big-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            text-align: center;
+            font-size: 24px;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: 0.2s;
+            font-weight: bold;
+            box-shadow: 0 5px 0 #2E7D32;
+        }
+        .big-btn:hover { background-color: #45a049; transform: translateY(-2px); }
+        .big-btn:active { transform: translateY(2px); box-shadow: none; }
+
+        #confetti {
+            display: none;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 20;
+            font-size: 60px;
+            text-align: center;
+            top: 20%;
+            color: gold;
+            text-shadow: 2px 2px 0 #000;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Start Screen (Required for Audio Permission) -->
+    <div id="start-screen">
+        <h1 style="color:white; font-size: 3rem;">Safe Crossing Hero</h1>
+        <p style="font-size: 1.5rem; margin-bottom: 30px;">Turn your volume up! 🔊</p>
+        <button class="big-btn" onclick="startGame()">CLICK TO START</button>
+    </div>
+
+    <div id="ui-container">
+        <div id="instruction">WAIT for Green</div>
+    </div>
+
+    <div id="signal-status" class="light-red"></div>
+    <div id="confetti">🎉 GREAT JOB! 🎉</div>
+
+    <div id="game-over">
+        <h1 id="msg-title">Oops!</h1>
+        <p id="msg-text" style="font-size: 1.2rem; margin-bottom:20px;">You crossed on Red!</p>
+        <button class="big-btn" onclick="resetGame()">Try Again</button>
+    </div>
+
+    <!-- Load Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- AUDIO SYSTEM (Synthesizer) ---
+        const AudioSys = {
+            ctx: null,
+            masterGain: null,
+            trafficOsc: null,
+            trafficGain: null,
+
+            init: function() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    this.masterGain = this.ctx.createGain();
+                    this.masterGain.gain.value = 0.3; // Master volume
+                    this.masterGain.connect(this.ctx.destination);
+                }
+            },
+
+            playTone: function(freq, type, duration, time = 0) {
+                if(!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime + time);
+                
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime + time);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + time + duration);
+
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start(this.ctx.currentTime + time);
+                osc.stop(this.ctx.currentTime + time + duration);
+            },
+
+            // Traffic Noise (Brown Noise simulation)
+            startTraffic: function() {
+                if(!this.ctx) return;
+                const bufferSize = 2 * this.ctx.sampleRate;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const output = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    output[i] = (lastOut + (0.02 * white)) / 1.02;
+                    lastOut = output[i];
+                    output[i] *= 3.5; 
+                }
+                
+                this.trafficOsc = this.ctx.createBufferSource();
+                this.trafficOsc.buffer = buffer;
+                this.trafficOsc.loop = true;
+                this.trafficGain = this.ctx.createGain();
+                this.trafficGain.gain.value = 0.0; // Start silent
+                
+                this.trafficOsc.connect(this.trafficGain);
+                this.trafficGain.connect(this.masterGain);
+                this.trafficOsc.start(0);
+            },
+
+            setTrafficVolume: function(vol) {
+                if(this.trafficGain) {
+                    // Smooth transition
+                    this.trafficGain.gain.setTargetAtTime(vol, this.ctx.currentTime, 0.5);
+                }
+            },
+
+            playSignalGreen: function() {
+                // High pitch "Ding-Ding"
+                this.playTone(880, 'sine', 0.1, 0);
+                this.playTone(1100, 'sine', 0.3, 0.15);
+            },
+
+            playSignalRed: function() {
+                // Lower "Boop"
+                this.playTone(300, 'square', 0.3);
+            },
+
+            playStep: function() {
+                // Short noise burst
+                this.playTone(200, 'triangle', 0.05);
+            },
+
+            playCrash: function() {
+                if(!this.ctx) return;
+                // Chaotic noise
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(20, this.ctx.currentTime + 0.5);
+                
+                gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.5);
+            },
+
+            playWin: function() {
+                // Arpeggio
+                this.playTone(523.25, 'sine', 0.2, 0);    // C
+                this.playTone(659.25, 'sine', 0.2, 0.15); // E
+                this.playTone(783.99, 'sine', 0.4, 0.30); // G
+                this.playTone(1046.5, 'sine', 0.6, 0.45); // C (High)
+            }
+        };
+        let lastOut = 0; // For noise generation
+
+        // --- GAME CONFIGURATION ---
+        let scene, camera, renderer;
+        let player, trafficLight, road;
+        let cars = [];
+        let isGameRunning = false; 
+        let signalState = "red"; 
+        let keyState = {};
+        let carSpeed = 0.15;
+        
+        const PLAYER_SPEED = 0.1;
+        const CROSSING_TIME = 4000; 
+        let signalInterval;
+
+        // --- INITIALIZATION ---
+        function startGame() {
+            document.getElementById('start-screen').style.display = 'none';
+            AudioSys.init(); // Enable Audio
+            
+            if (!scene) {
+                init3D();
+            }
+            
+            isGameRunning = true;
+            AudioSys.startTraffic();
+            AudioSys.setTrafficVolume(0.8); // Turn on traffic noise
+            resetGame();
+        }
+
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 6, 9);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 10, 5);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            createWorld();
+            
+            window.addEventListener('keydown', (e) => {
+                if(!keyState[e.code] && isGameRunning) AudioSys.playStep(); // Sound on key press
+                keyState[e.code] = true;
+            });
+            window.addEventListener('keyup', (e) => keyState[e.code] = false);
+            window.addEventListener('resize', onWindowResize, false);
+
+            animate();
+        }
+
+        function createWorld() {
+            // Ground
+            const ground = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshStandardMaterial({ color: 0x55aa55 }));
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -0.1;
+            scene.add(ground);
+
+            // Road
+            road = new THREE.Mesh(new THREE.PlaneGeometry(50, 4), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+            road.rotation.x = -Math.PI / 2;
+            scene.add(road);
+
+            // Stripes
+            for(let i = -2; i <= 2; i++) {
+                const stripe = new THREE.Mesh(new THREE.PlaneGeometry(1, 3.5), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+                stripe.rotation.x = -Math.PI / 2;
+                stripe.position.set(i * 1.5, 0.01, 0);
+                scene.add(stripe);
+            }
+
+            // Player
+            player = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.5, 0.8), new THREE.MeshStandardMaterial({ color: 0x0044ff }));
+            player.position.set(0, 0.75, 5);
+            player.castShadow = true;
+            scene.add(player);
+
+            // Traffic Light Pole
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4), new THREE.MeshStandardMaterial({ color: 0x555555 }));
+            pole.position.set(3.5, 2, -3);
+            scene.add(pole);
+            trafficLight = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.5, 0.8), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+            trafficLight.position.set(3.5, 3.5, -3);
+            scene.add(trafficLight);
+
+            spawnCars();
+        }
+
+        function spawnCars() {
+            for(let i=0; i<3; i++) {
+                const car = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 1), new THREE.MeshStandardMaterial({ color: Math.random() > 0.5 ? 0xff3300 : 0xffcc00 }));
+                car.position.set(-15 - (i * 10), 0.5, (Math.random() > 0.5 ? 1 : -1));
+                car.castShadow = true;
+                scene.add(car);
+                cars.push(car);
+            }
+        }
+
+        function toggleSignal() {
+            if(!isGameRunning) return;
+
+            if (signalState === "red") {
+                signalState = "green";
+                updateUI("green");
+                AudioSys.playSignalGreen();
+                AudioSys.setTrafficVolume(0.1); // Quiet cars when green
+            } else {
+                signalState = "red";
+                updateUI("red");
+                AudioSys.playSignalRed();
+                AudioSys.setTrafficVolume(0.8); // Loud cars when red
+            }
+        }
+
+        function updateUI(state) {
+            const signalDiv = document.getElementById('signal-status');
+            const textDiv = document.getElementById('instruction');
+
+            if (state === "green") {
+                signalDiv.className = "light-green";
+                textDiv.innerHTML = "GO! Cross Safe!";
+                textDiv.style.color = "#33ff33";
+                trafficLight.material.color.setHex(0x33ff33);
+            } else {
+                signalDiv.className = "light-red";
+                textDiv.innerHTML = "STOP! Wait for Green.";
+                textDiv.style.color = "#ff3333";
+                trafficLight.material.color.setHex(0xff3333);
+            }
+        }
+
+        function moveCars() {
+            cars.forEach(car => {
+                if(signalState === "red") {
+                    car.position.x += carSpeed;
+                }
+                if (car.position.x > 20) {
+                    car.position.x = -20;
+                    car.position.z = (Math.random() > 0.5 ? 1 : -1);
+                    car.material.color.setHex(Math.random() * 0xffffff);
+                }
+            });
+        }
+
+        function checkCollisions() {
+            const playerBox = new THREE.Box3().setFromObject(player);
+            cars.forEach(car => {
+                if (playerBox.intersectsBox(new THREE.Box3().setFromObject(car))) {
+                    gameOver("CRASH!", "You hit a car!");
+                }
+            });
+        }
+
+        function checkWin() {
+            if (player.position.z < -3) {
+                isGameRunning = false;
+                AudioSys.playWin();
+                document.getElementById('confetti').style.display = 'block';
+                setTimeout(() => gameOver("You did it!", "You crossed safely!"), 2000);
+            }
+        }
+
+        function resetGame() {
+            player.position.set(0, 0.75, 5);
+            isGameRunning = true;
+            signalState = "red";
+            updateUI("red");
+            document.getElementById('game-over').style.display = 'none';
+            document.getElementById('confetti').style.display = 'none';
+            
+            // Reset Signal Loop
+            clearInterval(signalInterval);
+            signalInterval = setInterval(toggleSignal, CROSSING_TIME);
+            
+            cars.forEach((car, index) => {
+                car.position.set(-15 - (index * 10), 0.5, (Math.random() > 0.5 ? 1 : -1));
+            });
+        }
+
+        function gameOver(title, msg) {
+            isGameRunning = false;
+            AudioSys.playCrash();
+            AudioSys.setTrafficVolume(0); // Silence traffic
+            clearInterval(signalInterval); // Stop signal timer
+            document.getElementById('msg-title').innerText = title;
+            document.getElementById('msg-text').innerText = msg;
+            document.getElementById('game-over').style.display = 'block';
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (isGameRunning) {
+                if (keyState['ArrowUp'] || keyState['KeyW']) player.position.z -= PLAYER_SPEED;
+                if (keyState['ArrowDown'] || keyState['KeyS']) player.position.z += PLAYER_SPEED;
+                if (keyState['ArrowLeft'] || keyState['KeyA']) player.position.x -= PLAYER_SPEED;
+                if (keyState['ArrowRight'] || keyState['KeyD']) player.position.x += PLAYER_SPEED;
+
+                player.position.x = Math.max(-4, Math.min(4, player.position.x));
+                player.position.z = Math.max(-5, Math.min(6, player.position.z));
+
+                moveCars();
+                checkCollisions();
+                checkWin();
+            }
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+    </script>
+</body>
+</html>
